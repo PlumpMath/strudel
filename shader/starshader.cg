@@ -6,10 +6,9 @@ void vshader(float4 vtx_position   : POSITION,
              float3 vtx_normal     : NORMAL,
              out float4 l_position : POSITION,
              out float4 l_coords   : TEXCOORD0,
-       out float4 l_color    : COLOR,
-       uniform float4 mspos_eye,
-         uniform float4 k_lightcolor,
-             uniform float4 mspos_light,
+             out float4 l_color    : COLOR,
+             uniform float4 mspos_eye,
+             uniform float4 k_starcolor,
              uniform float4x4 mat_modelproj)
 {
   // transform the position for output
@@ -17,9 +16,7 @@ void vshader(float4 vtx_position   : POSITION,
   // pass it through untransformed for procedural texturing
   l_coords = vtx_position;
   
-  // diffuse lighting
-  float4 lightdir = normalize(mspos_light-vtx_position);
-  l_color = k_lightcolor * max( dot( vtx_normal, lightdir ), 0 );
+  l_color = k_starcolor; //* max( dot( vtx_normal, lightdir ), 0 );
   
   // pass the dot of the view vector and the normal in alpha;
   // use this for atmospheric haze
@@ -146,7 +143,7 @@ void fshader(float4 l_coords    : TEXCOORD0,
 
     // TODO: atmospheric haze
     // TODO: surface roughness
-    //float4 light_color = l_color;
-    o_color = color;// * light_color;
+    float4 starcolor = l_color;
+    o_color = color;
 }
 
