@@ -1,0 +1,152 @@
+//Cg
+//
+//Cg profile arbvp1 arbfp1
+
+void vshader(float4 vtx_position   : POSITION,
+             float3 vtx_normal     : NORMAL,
+             out float4 l_position : POSITION,
+             out float4 l_coords   : TEXCOORD0,
+       out float4 l_color    : COLOR,
+       uniform float4 mspos_eye,
+         uniform float4 k_lightcolor,
+             uniform float4 mspos_light,
+             uniform float4x4 mat_modelproj)
+{
+  // transform the position for output
+  l_position = mul(mat_modelproj, vtx_position);
+  // pass it through untransformed for procedural texturing
+  l_coords = vtx_position;
+  
+  // diffuse lighting
+  float4 lightdir = normalize(mspos_light-vtx_position);
+  l_color = k_lightcolor * max( dot( vtx_normal, lightdir ), 0 );
+  
+  // pass the dot of the view vector and the normal in alpha;
+  // use this for atmospheric haze
+  float4 eyedir = normalize(mspos_eye-vtx_position);
+  float a = 1.0-max(dot(vtx_normal,eyedir),0);
+  l_color.a = a*a*a;
+}
+
+float4 multi_oct_noise( sampler3D tex, float4 pos, float aspect, float rolloff )
+{
+  // top octave is low frequency
+  float4 scale = float4(0.125/aspect,0.125/aspect,0.125,1);
+  float amp = 1.0;
+    float amp_alpha = rolloff * rolloff;
+
+  float4 v = tex3D( tex, pos*scale );
+  scale *= 4.13; amp *= amp_alpha; v += (tex3D( tex, pos*scale )-0.5)*amp;
+  scale *= 3.97; amp *= amp_alpha; v += (tex3D( tex, pos*scale )-0.5)*amp;
+
+  return v;
+}
+
+float4 dist_noise( sampler3D tex, float4 pos, float distortion, float aspect, float rolloff )
+{
+  // top octave is low frequency
+  float4 scale = float4(0.125/aspect,0.125/aspect,0.125,1);
+  float amp = 1.0;
+    float amp_alpha = rolloff*rolloff;
+
+  float4 offset = pos+0.5;
+  offset = tex3D( tex, offset );
+  offset *= distortion;
+  float4 v = tex3D( tex, (pos+offset)*scale );
+  scale *= 4.13; amp *= amp_alpha; v += (tex3D( tex, (pos+offset*amp)*scale )-0.5)*amp;
+  scale *= 3.97; amp *= amp_alpha; v += (tex3D( tex, (pos+offset*amp)*scale )-0.5)*amp;
+
+  return v;
+}
+
+
+#define PI_OVER_TWO 1.5708
+#define MARGIN  (1.0/32.0)
+
+void fshader(float4 l_coords    : TEXCOORD0,
+       float4 l_color   : COLOR,
+       uniform float4 k_seed,
+       uniform float4 k_bias12,
+       uniform float4 k_bias34,
+       uniform float4 k_scale,
+       uniform float4 k_aspect,
+       uniform float4 k_latitude,
+       uniform float4 k_noisemix,
+       sampler3D tex_0 : TEXUNIT0,  // noise texture for planet
+       sampler2D tex_1 : TEXUNIT1,  // layer 1 texture for planet
+       sampler2D tex_2 : TEXUNIT2,  // layer 2 texture for planet
+       sampler2D tex_3 : TEXUNIT3,  // layer 3 texture for planet
+       sampler2D tex_4 : TEXUNIT4,  // layer 4 texture for planet
+
+             out float4 o_color : COLOR )
+{
+  // k_scale.x = layer 1-2 scale
+  // k_scale.y = layer 1-2 distort
+  // k_scale.z = layer 3-4 scale
+  // k_scale.w = layer 3-4 distort
+  
+  float4 L12_scale = 0.2 + (k_scale.x*2.0);
+  float4 L12_distort = k_scale.y;
+  float4 L34_scale = 0.2 + (k_scale.z*2.0); 
+  float4 L34_distort = k_scale.w;
+  
+    float4 L12_aspect = k_aspect.x;
+    float4 L34_aspect = k_aspect.y;
+    float4 L12_rolloff = k_aspect.z;
+    float4 L34_rolloff = k_aspect.w;
+  
+  // get 4 channels of noise for land and cloud
+  // k_seed.xy = L12 noise offset
+  // k_seed.wz = L34 noise offset
+  // k_seed.w is time-varying (clouds), others are fixed per planet
+  float4 L12_offset = float4( k_seed.x, k_seed.y, k_seed.z, k_seed.x );
+  float4 L34_offset = float4( k_seed.z, k_seed.w, k_seed.x, k_seed.w ); 
+  
+  // two noise sources
+  // k_noisemix.x = layer 1 A->B noise mix (0 = surface, 1 = cloud)
+  // k_noisemix.y = layer 2 A->B noise mix (0 = surface, 1 = cloud)
+  // k_noisemix.z = layer 3 A->B noise mix (0 = surface, 1 = cloud)
+  // k_noisemix.w = layer 4 A->B noise mix (0 = surface, 1 = cloud)
+  float4 noiseA = dist_noise( tex_0, L12_offset + (l_coords*L12_scale), L12_distort, L12_aspect, L12_rolloff );
+  float4 noiseB = multi_oct_noise( tex_0, L34_offset + (l_coords*L34_scale) + (noiseA*L34_distort), L34_aspect, L34_rolloff );
+  // k_bias12.xy = layer 1 lookup bias
+  // k_bias12.zw = layer 2 lookup bias
+  // k_bias34.xy = layer 3 lookup bias
+  // k_bias34.zw = layer 4 lookup bias
+  
+  // k_latitude.x = layer 1 latitude -> v
+  // k_latitude.y = layer 2 latitude -> v
+  // k_latitude.z = layer 3 latitude -> v
+  // k_latitude.w = layer 4 latitude -> v
+  
+  // let's do layer 1.
+  float2 L1_uv = (lerp(noiseA,noiseB,k_noisemix.x).xy + k_bias12.xy);
+    L1_uv.y = lerp(L1_uv.y, (0.5*l_coords.z)+0.5, k_latitude.x);
+  float4 L1_rgba = tex2D( tex_1, L1_uv );
+  
+  // now layer 2
+  float2 L2_uv = (lerp(noiseA,noiseB,k_noisemix.y).zw + k_bias12.zw);
+    L2_uv.y = lerp(L2_uv.y, (0.5*l_coords.z)+0.5, k_latitude.y);
+  float4 L2_rgba = tex2D( tex_2, L2_uv );
+  
+  // now layer 3
+  float2 L3_uv = (lerp(noiseA,noiseB,k_noisemix.z).xz + k_bias34.xy);
+    L3_uv.y = lerp(L3_uv.y, (0.5*l_coords.z)+0.5, k_latitude.z);
+  float4 L3_rgba = tex2D( tex_3, L3_uv );
+
+  // now layer 4
+  float2 L4_uv = (lerp(noiseA,noiseB,k_noisemix.w).yw + k_bias34.zw);
+    L4_uv.y = lerp(L4_uv.y, (0.5*l_coords.z)+0.5, k_latitude.w);
+  float4 L4_rgba = tex2D( tex_4, L4_uv );
+
+  // now we put it all together
+  float4 color = lerp( L1_rgba,L2_rgba,L2_rgba.a );
+         color = lerp( color  ,L3_rgba,L3_rgba.a );
+         color = lerp( color  ,L4_rgba,L4_rgba.a );
+
+    // TODO: atmospheric haze
+    // TODO: surface roughness
+    //float4 light_color = l_color;
+    o_color = color;// * light_color;
+}
+
