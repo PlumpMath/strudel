@@ -17,12 +17,6 @@ void vshader(float4 vtx_position   : POSITION,
   l_coords = vtx_position;
   
   l_color = k_starcolor; //* max( dot( vtx_normal, lightdir ), 0 );
-  
-  // pass the dot of the view vector and the normal in alpha;
-  // use this for atmospheric haze
-  float4 eyedir = normalize(mspos_eye-vtx_position);
-  float a = 1.0-max(dot(vtx_normal,eyedir),0);
-  l_color.a = a*a*a;
 }
 
 float4 multi_oct_noise( sampler3D tex, float4 pos, float aspect, float rolloff )
@@ -56,6 +50,55 @@ float4 dist_noise( sampler3D tex, float4 pos, float distortion, float aspect, fl
   return v;
 }
 
+float min_channel(float4 v) {
+  float t = (v.x<v.y) ? v.x : v.y;
+  t = (t<v.z) ? t : v.z;
+  return t;
+}
+
+float max_channel(float4 v) {
+  float t = (v.x>v.y) ? v.x : v.y;
+  t = (t>v.z) ? t : v.z;
+  return t;
+}
+
+float4 rgb_to_hsv(float4 rgb) {
+  float4 hsv = float4(0,0,0,rgb.a);
+  float minVal = min_channel(rgb);
+  float maxVal = max_channel(rgb);
+  float delta = maxVal - minVal;
+  hsv.z = maxVal;
+  if (delta != 0) {
+    hsv.y = delta / maxVal;
+    float3 delrgb;
+    delrgb = ( ( ( maxVal.xxx - float3(rgb) ) / 6.0 ) + ( delta / 2.0 ) ) / delta;
+    if      ( rgb.x == maxVal ) hsv.x = delrgb.z - delrgb.y;
+    else if ( rgb.y == maxVal ) hsv.x = ( 1.0/3.0) + delrgb.x - delrgb.z;
+    else if ( rgb.z == maxVal ) hsv.x = ( 2.0/3.0) + delrgb.y - delrgb.x;
+    if ( hsv.x < 0.0 ) { hsv.x += 1.0; }
+    if ( hsv.x > 1.0 ) { hsv.x -= 1.0; }
+  }
+  
+  return hsv;
+}
+
+float4 hsv_to_rgb(float4 hsv) {
+    float4 rgb = hsv.z;
+    if ( hsv.y != 0 ) {
+       float var_h = hsv.x * 6;
+       float var_i = floor(var_h);   // Or ... var_i = floor( var_h )
+       float var_1 = hsv.z * (1.0 - hsv.y);
+       float var_2 = hsv.z * (1.0 - hsv.y * (var_h-var_i));
+       float var_3 = hsv.z * (1.0 - hsv.y * (1-(var_h-var_i)));
+       if      (var_i == 0) { rgb = float4(hsv.z, var_3, var_1, hsv.a); }
+       else if (var_i == 1) { rgb = float4(var_2, hsv.z, var_1, hsv.a); }
+       else if (var_i == 2) { rgb = float4(var_1, hsv.z, var_3, hsv.a); }
+       else if (var_i == 3) { rgb = float4(var_1, var_2, hsv.z, hsv.a); }
+       else if (var_i == 4) { rgb = float4(var_3, var_1, hsv.z, hsv.a); }
+       else                 { rgb = float4(hsv.z, var_1, var_2, hsv.a); }
+   }
+   return rgb;
+}
 
 #define PI_OVER_TWO 1.5708
 #define MARGIN  (1.0/32.0)
@@ -97,7 +140,7 @@ void fshader(float4 l_coords    : TEXCOORD0,
   // k_seed.wz = L34 noise offset
   // k_seed.w is time-varying (clouds), others are fixed per planet
   float4 L12_offset = float4( k_seed.x, k_seed.y, k_seed.z, k_seed.x );
-  float4 L34_offset = float4( k_seed.z, k_seed.w, k_seed.x, k_seed.w ); 
+  float4 L34_offset = float4( k_seed.z, k_seed.w, k_seed.w, k_seed.y ); 
   
   // two noise sources
   // k_noisemix.x = layer 1 A->B noise mix (0 = surface, 1 = cloud)
@@ -137,13 +180,14 @@ void fshader(float4 l_coords    : TEXCOORD0,
   float4 L4_rgba = tex2D( tex_4, L4_uv );
 
   // now we put it all together
-  float4 color = lerp( L1_rgba,L2_rgba,L2_rgba.a );
-         color = lerp( color  ,L3_rgba,L3_rgba.a );
-         color = lerp( color  ,L4_rgba,L4_rgba.a );
+  float4 color = lerp( L3_rgba,L4_rgba,L4_rgba.a );
+         //color = lerp( color  ,L3_rgba,L3_rgba.a );
+         //color = lerp( color  ,L4_rgba,L4_rgba.a );
 
     // TODO: atmospheric haze
     // TODO: surface roughness
-    float4 starcolor = l_color;
-    o_color = color;
+    float4 starcolor_hsv = rgb_to_hsv(l_color);
+    float4 color_hsv = rgb_to_hsv(color);
+    o_color = hsv_to_rgb(float4(starcolor_hsv.x, color_hsv.y, color_hsv.z, 1));
 }
 

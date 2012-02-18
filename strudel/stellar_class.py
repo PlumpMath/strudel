@@ -42,7 +42,14 @@ class StellarClass(object):
         main_seq_total_weight = 0.0
         non_main_total_weight = 0.0
 
+        cls.highest_radius = 0.0
+        cls.lowest_radius = float("inf")
+
         for spec_type, row in cls.rows_by_spec_type.iteritems():
+            radius = float(row['Radius'])
+            if radius > cls.highest_radius: cls.highest_radius = radius
+            if radius < cls.lowest_radius: cls.lowest_radius = radius
+
             mass = float(row['Mass'])
             if spec_type[0] in "OBAFGKM":
                 ch = spec_type[0]

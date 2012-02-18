@@ -42,9 +42,11 @@ class StrudelApp(ShowBase):
     def view_object(self, obj):
         self.cleanup()
         if isinstance(obj, Star):
+            print obj.sclass
             obj.display = StarDisplay(self, obj)
             self.render.setShaderAuto()
-            #self.filters.setBloom(blend=(0.5,0.5,0.5,1), desat=-10.0, intensity=4.0, size="medium")
+            self.filters.setBloom(blend=(0.5,0.5,0.5,0), desat=-2.0, intensity=4.0, size="medium")
+            self.filters.setBlurSharpen(amount=0.5)
             self.camera.setPos(0, 0, -4)
             self.camera.lookAt(obj.display.node)
             self.accept("enter", lambda: self.view_object(Star.random()))

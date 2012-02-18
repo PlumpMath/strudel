@@ -12,6 +12,7 @@ import glob
 from direct.filter.CommonFilters import CommonFilters
 
 from stellar_class import StellarClass
+from math import log
 
 class Star(object):
     @classmethod
@@ -36,16 +37,12 @@ class ParamSet(object):
         self.vectors["seed"    ] = seedparam
         self.vectors["bias12"  ] = Vec4(0,0,0,0)
         self.vectors["bias34"  ] = Vec4(0,0,0,0.0)
-        self.vectors["aspect"  ] = Vec4(1,1,0.7,0.7)
+        self.vectors["aspect"  ] = Vec4(1,1,0.4,0.4)
         self.vectors["latitude"] = Vec4(0.5,0.0,0.0,0.0)
-        self.vectors["scale"] = Vec4(0.3, 0.3, 0.2, 0.4)
-        self.vectors["noisemix"] = Vec4(0,0,1,1)
+        self.vectors["noisemix"] = Vec4(0,0,0.5,0.5)
 
 class StarDisplay(object):
     ready = False
-
-    min_scale = Vec4(0.3, 0.3, 0.2, 0.4)
-    max_scale = Vec4(0.6, 0.6, 0.4, 0.8)
 
     @classmethod
     def setup(cls, base):
@@ -86,7 +83,7 @@ class StarDisplay(object):
         self.node = self.light.attachNewNode(SphereNode(subdivides=4))
         self.node.setShader(Shader.load("shader/starshader.cg"))
         self.cloudtime = 0.0
-        self.seed = hash("fish")
+        #self.seed = hash("fish")
         self.param_set = ParamSet(self.seed)
 
         self.compute_seed_param()
@@ -110,15 +107,23 @@ class StarDisplay(object):
         self.setup_shader_inputs()
 
     def setup_shader_inputs(self):
+        min_scale = Vec4(0.5, 0.5, 0.5, 0.5)
+        max_scale = Vec4(0.8, 0.8, 0.8, 0.8)
+        max_radius = StellarClass.highest_radius
+        min_radius = StellarClass.lowest_radius
+        scale = min_scale + (max_scale-min_scale)*(log(self.obj.radius)/log(max_radius))
+        print scale
+        self.node.setShaderInput("scale", scale)
         for k, v in self.param_set.vectors.iteritems():
             self.node.setShaderInput(k, v)
-        self.node.setShaderInput("starcolor", Vec4(1,0,0,1))#self.obj.color)
+        self.node.setShaderInput("starcolor", self.obj.color)
         self.node.setShaderInput("eye", self.base.camera)
+
 
     def tick(self, time):
         elapsed = time - self.lasttime
         self.lasttime = time
-        self.cloudtime += elapsed * 0.02
+        self.cloudtime += elapsed * 0.05
         self.yaw += 360.0 * self.speed * elapsed
         self.node.setHpr(self.yaw, self.pitch, self.roll)
         self.compute_seed_param()
