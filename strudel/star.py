@@ -37,7 +37,7 @@ class ParamSet(object):
         self.vectors["seed"    ] = seedparam
         self.vectors["bias12"  ] = Vec4(0,0,0,0)
         self.vectors["bias34"  ] = Vec4(0,0,0,0.0)
-        self.vectors["aspect"  ] = Vec4(1,1,0.4,0.4)
+        self.vectors["aspect"  ] = Vec4(1,1,0.7,0.7)
         self.vectors["latitude"] = Vec4(0.5,0.0,0.0,0.0)
         self.vectors["noisemix"] = Vec4(0,0,0.5,0.5)
 
@@ -86,6 +86,14 @@ class StarDisplay(object):
         #self.seed = hash("fish")
         self.param_set = ParamSet(self.seed)
 
+        min_scale = Vec4(0.5, 0.5, 0.5, 0.5)
+        max_scale = Vec4(1, 1, 1, 1)
+        max_radius = StellarClass.highest_radius
+        min_radius = StellarClass.lowest_radius
+        radius_factor = log(self.obj.radius*(1/min_radius), 100) / log(max_radius*(1/min_radius), 100)
+        self.param_set.vectors['scale'] = min_scale + (max_scale-min_scale)*radius_factor
+        print self.param_set.vectors['scale']
+
         self.compute_seed_param()
 
         for stage, tex in StarDisplay.texture_set:
@@ -107,13 +115,6 @@ class StarDisplay(object):
         self.setup_shader_inputs()
 
     def setup_shader_inputs(self):
-        min_scale = Vec4(0.5, 0.5, 0.5, 0.5)
-        max_scale = Vec4(0.8, 0.8, 0.8, 0.8)
-        max_radius = StellarClass.highest_radius
-        min_radius = StellarClass.lowest_radius
-        scale = min_scale + (max_scale-min_scale)*(log(self.obj.radius)/log(max_radius))
-        print scale
-        self.node.setShaderInput("scale", scale)
         for k, v in self.param_set.vectors.iteritems():
             self.node.setShaderInput(k, v)
         self.node.setShaderInput("starcolor", self.obj.color)

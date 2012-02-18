@@ -19,7 +19,9 @@ from panda3d.core import loadPrcFile
 
 loadPrcFile("init/panda.prc")
 
-class StrudelApp(ShowBase):
+from strudel.evented import Evented
+
+class StrudelApp(ShowBase, Evented):
     def __init__(self):
         ShowBase.__init__(self)
         self.setBackgroundColor(0, 0, 0)
@@ -28,24 +30,54 @@ class StrudelApp(ShowBase):
         self.filters = CommonFilters(self.win, self.cam)
         self.displays = []
 
-        def update_task(task):
-            for display in self.displays:
-                display.tick(task.time)
-            return Task.cont
+    def drag_task(self, task):
+        if self.mouseWatcherNode.hasMouse():
+            mpos = self.mouseWatcherNode.getMouse()
+            if self.pressed['mouse3']:
+                self.emit('drag', self.rotateStartX-mpos.getX(), self.rotateStartY-mpos.getY())
+            self.rotateStartX = self.mouseWatcherNode.getMouseX()
+            self.rotateStartY = self.mouseWatcherNode.getMouseY()
+        return Task.cont
 
-        self.taskMgr.add(update_task, "update_task")
+    def update_task(self, task):
+        for display in self.displays:
+            display.tick(task.time)
+        return Task.cont
+
+    def base_setup(self):
+        self.pressed = {}
+        for button in ["mouse1", "mouse2", "mouse3"]:
+            self.pressed[button] = False
+            def button_down(): self.pressed[button] = True
+            def button_up(): self.pressed[button] = False
+            self.accept(button, button_down)
+            self.accept(button+"-up", button_up)
+
+        self.taskMgr.add(self.update_task, "update_task")
+        self.taskMgr.add(self.drag_task, "drag_task")
 
     def cleanup(self):
         for display in self.displays:
             display.remove()
+        for child in self.render.getChildren():
+            if child != self.camera:
+                child.removeNode()
+        self.messenger.clear()
+        self.taskMgr.removeTasksMatching('task')
+        self.clear_handlers()
+        self.base_setup()
 
     def view_object(self, obj):
         self.cleanup()
+        def drag_rotate(xdiff, ydiff):
+            obj.display.roll = obj.display.roll - xdiff*100
+            obj.display.pitch = obj.display.pitch - ydiff*100
+        self.on('drag', drag_rotate)
         if isinstance(obj, Star):
             print obj.sclass
             obj.display = StarDisplay(self, obj)
             self.render.setShaderAuto()
-            self.filters.setBloom(blend=(0.5,0.5,0.5,0), desat=-2.0, intensity=4.0, size="medium")
+            self.filters.setBloom(blend=(0.5,0.5,0.5,0), desat=-2.0, intensity=8.0, size="medium")
             self.filters.setBlurSharpen(amount=0.5)
             self.camera.setPos(0, 0, -4)
             self.camera.lookAt(obj.display.node)
