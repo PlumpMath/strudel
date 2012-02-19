@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+import logging
+logging.basicConfig(format='[%(module)s] %(message)s', level=logging.DEBUG)
+
 from strudel.stellar_class import StellarClass
 from strudel.galaxy import Galaxy, GalaxyGenerator
 from strudel.star import Star, StarView
@@ -39,6 +42,15 @@ class StrudelApp(ShowBase, Evented):
         self.want_shell = False
         self.inspector = ObjectInspector(self)
 
+        # HACK (Mispy): This disables the alt-modifier in order to
+        # workaround a compatibility issue with Panda on some Linux
+        # systems where alt+tab never sends an alt-up event, causing
+        # the loss of subsequent input until alt is pressed again.
+        buttons = base.mouseWatcherNode.getModifierButtons()
+        buttons.removeButton(buttons.getButton(2))
+        base.mouseWatcherNode.setModifierButtons(buttons)
+        base.buttonThrowers[0].node().setModifierButtons(buttons)
+
     def drag_task(self, task):
         if self.mouseWatcherNode.hasMouse():
             mpos = self.mouseWatcherNode.getMouse()
@@ -65,12 +77,22 @@ class StrudelApp(ShowBase, Evented):
         python = sys.executable
         os.execl(python, python, *sys.argv)
 
-    def base_setup(self):
+    def on_window_event(self, win):
+        if win.isClosed():
+            sys.exit()
+        else:
+            width = win.getProperties().getXSize()
+            height = win.getProperties().getYSize()
+            self.cam.node().getLens().setFilmSize(width, height)
+            #self.cam.node().getLens().setFocalLength(FOCAL_LENGTH)
+
+    def setup(self):
         self.lasttime = 0.0
         self.pressed = {}
         self.accept("escape", sys.exit)
         self.accept("`", self.debug_shell)
         self.accept("f12", self.reload_app)
+        self.accept(self.win.getWindowEvent(), self.on_window_event)
         for button in ["mouse1", "mouse2", "mouse3"]:
             self.pressed[button] = False
             def button_down(button=button): self.pressed[button] = True
@@ -100,7 +122,7 @@ class StrudelApp(ShowBase, Evented):
         self.messenger.clear()
         self.taskMgr.removeTasksMatching('task')
         self.clear_handlers()
-        self.base_setup()
+        self.setup()
 
     def show_text(self, lines):
         if isinstance(lines, str): lines = [lines]
@@ -119,22 +141,29 @@ class StrudelApp(ShowBase, Evented):
             self.want_shell = False
             from IPython import embed
             from IPython.lib import inputhook
+            # XXX (Mispy): The IPython mainloop runs quite slowly
+            # and causes massive FPS loss. I don't know how to solve
+            # this but I believe it is solvable.
             inputhook.set_inputhook(self.step)
             embed()
         return 0
 
+    def load_galaxy(self, name):
+        self.galaxy = Galaxy.load(name)
+
 if __name__ == '__main__':
     base = StrudelApp()
+    if len(sys.argv) > 1 and sys.argv[1] == "new_galaxy":
+        galaxy = GalaxyGenerator.barred_spiral('testing')
+        galaxy.save()
+        sys.exit()
+
+    base.load_galaxy('testing')
     if len(sys.argv) > 1:
-        if sys.argv[1] == "view_object":
+        if sys.argv[1] == "inspect":
             base.inspector.inspect(eval(sys.argv[2]))
 
-    # Run IPython alongside Strudel; unfortunately quite slow
-    # from IPython import embed
-    # from IPython.lib import inputhook
-    # inputhook.set_inputhook(base.step)
-    # embed()
-
+    base.setup()
     while True:
         base.step()
 

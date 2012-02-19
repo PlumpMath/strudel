@@ -4,6 +4,9 @@ from panda3d.core import Point3
 
 from strudel.model import Model
 from strudel.stellar_class import StellarClass
+import cPickle as pickle
+import os, sys
+import logging
 
 class GalaxyGenerator(object):
     @staticmethod
@@ -13,7 +16,7 @@ class GalaxyGenerator(object):
         # Deviation from plane is approximated according to: http://arxiv.org/pdf/astro-ph/0507655
         # TODO: Sinusoidal dependence of said deviation by galactic longitude.
         from star import Star
-        print "Generating barred spiral galaxy '" + name + "'..."
+        logging.info("Generating barred spiral galaxy '" + name + "'.")
         galaxy = Galaxy()
         galaxy.name = name
         galaxy.kind = "Barred Spiral"
@@ -28,7 +31,7 @@ class GalaxyGenerator(object):
 
           name = sclass.name + '-' + str(count)
 
-          galaxy.stars.append(Star(sclass, name=name, galpos=pos))
+          galaxy.stars.append(Star(sclass, galaxy=galaxy, name=name, galpos=pos))
 
         starcount, clustercount = 0, 0
         while starcount < numstars:
@@ -69,16 +72,32 @@ class GalaxyGenerator(object):
             starcount += 1
 
           if starcount % 1000 == 0:
-            print "Added %d localities and %d clusters..." % (starcount, clustercount)
+            logging.info("Added %d localities and %d clusters." % (starcount, clustercount))
 
         return galaxy
 
 class Galaxy(Model):
+    @staticmethod
+    def load(name):
+        logging.info("Loading Galaxy '%s'." % name)
+        f = open(Galaxy.savepath(name), 'rb')
+        return pickle.load(f)
+
+    @staticmethod
+    def savepath(name):
+        return os.path.join(sys.path[0], "save/%s.pickle" % name)
+
     def __init__(self, **kwargs):
         super(Galaxy, self).__init__(**kwargs)
         self.stars = []
 
     def __repr__(self):
         return "<Galaxy '%s' numstars=%d>" % (self.name, len(self.stars))
+
+    def save(self):
+        logging.info("Saving %s." % self)
+        f = open(Galaxy.savepath(self.name), 'wb')
+        pickle.dump(self, f)
+
 
 

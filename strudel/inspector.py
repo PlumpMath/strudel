@@ -3,6 +3,7 @@ from strudel.planet import Planet, PlanetView
 from strudel.galaxy import GalaxyGenerator
 from strudel.galaxy_view import GalaxyView
 from pandac.PandaModules import Vec4, PointLight
+import random
 
 class ObjectInspector(object):
     """Provides functions to graphically inspect an object in isolation."""
@@ -21,7 +22,7 @@ class ObjectInspector(object):
         self.base.camera.setPos(0, 0, -5000)
         self.base.camera.lookAt(view.node)
         self.slowly_rotate(view)
-        self.base.accept("enter", lambda: self.inspect(GalaxyGenerator.barred_spiral('testing')))
+        self.base.accept("enter", lambda: self.inspect(GalaxyGenerator.barred_spiral('tmp')))
         self.view = view
 
     def inspect_star(self, star):
@@ -31,7 +32,7 @@ class ObjectInspector(object):
         self.base.filters.setBlurSharpen(amount=0.5)
         self.base.camera.setPos(0, 0, -4)
         self.base.camera.lookAt(view.node)
-        self.base.accept("enter", lambda: self.inspect(Star.random()))
+        self.base.accept("enter", lambda: self.inspect(random.choice(star.galaxy.stars)))
         self.slowly_rotate(view)
         self.view = view
 
@@ -45,7 +46,7 @@ class ObjectInspector(object):
         view.node.setShaderInput("lightcolor", Vec4(1.0,1.0,1.0,1.0))
         self.base.camera.setPos(0, 0, -4)
         self.base.camera.lookAt(view.node)
-        self.base.accept("enter", lambda: self.inspect(Planet.random()))
+        self.base.accept("enter", lambda: self.inspect(random.choice(planet.galaxy.planets)))
         self.slowly_rotate(view)
         self.view = view
 

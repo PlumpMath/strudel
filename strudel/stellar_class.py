@@ -1,6 +1,7 @@
 from random import random
 from collections import OrderedDict
 import csv
+import logging
 
 class StellarClass(object):
     main_seq_basic_freqs = {
@@ -27,7 +28,8 @@ class StellarClass(object):
 
     @classmethod
     def setup(cls):
-        print "Loading stellar classes..."
+        if hasattr(cls, 'main_freqs'): return;
+        logging.info("Loading stellar classes.")
         # Load all 3098(!) spectral classes and their data.
         # http://isthe.com/chongo/tech/astro/HR-temp-mass-table-byhrclass.html
         cls.rows_by_spec_type = OrderedDict()
@@ -109,3 +111,4 @@ class StellarClass(object):
         self.green = float(row['G'])/255.0
         self.blue = float(row['B'])/255.0
 
+StellarClass.setup()

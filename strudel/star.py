@@ -28,7 +28,10 @@ class Star(Model):
         self.sclass = sclass
 
     def __getattr__(self, name):
-        return getattr(self.sclass, name)
+        if self.__dict__.has_key('sclass'):
+            return getattr(self.sclass, name)
+        else:
+            raise AttributeError
 
     @property
     def color(self):
@@ -71,8 +74,6 @@ class StarView(View):
             tex.setWrapV( Texture.WMClamp )
             cls.texture_set.append( (stage, tex) )
 
-        print cls.texture_set
-
         cls.ready = True
 
     def __init__(self, base, star, **kwargs):
@@ -85,7 +86,7 @@ class StarView(View):
         self.light = base.render.attachNewNode(plight)
 
         self.node = self.light.attachNewNode(SphereNode(subdivides=4))
-        self.node.setShader(Shader.load("shader/starshader.cg"))
+        self.node.setShader(Shader.load("shader/star.cg"))
         self.cloudtime = 0.0
         #self.seed = hash("fish")
         self.param_set = ParamSet(self.seed)
@@ -96,7 +97,6 @@ class StarView(View):
         min_radius = StellarClass.lowest_radius
         radius_factor = log(self.obj.radius*(1/min_radius), 100) / log(max_radius*(1/min_radius), 100)
         self.param_set.vectors['scale'] = min_scale + (max_scale-min_scale)*radius_factor
-        print self.param_set.vectors['scale']
 
         self.compute_seed_param()
 
