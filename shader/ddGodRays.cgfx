@@ -1,0 +1,196 @@
+//Cg
+/*********************************************************************NVMH3****
+*******************************************************************************
+$Revision$
+
+Copyright NVIDIA Corporation 2008
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THIS SOFTWARE IS PROVIDED
+*AS IS* AND NVIDIA AND ITS SUPPLIERS DISCLAIM ALL WARRANTIES, EITHER EXPRESS
+OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS FOR A PARTICULAR PURPOSE.  IN NO EVENT SHALL NVIDIA OR ITS SUPPLIERS
+BE LIABLE FOR ANY SPECIAL, INCIDENTAL, INDIRECT, OR CONSEQUENTIAL DAMAGES
+WHATSOEVER (INCLUDING, WITHOUT LIMITATION, DAMAGES FOR LOSS OF BUSINESS PROFITS,
+BUSINESS INTERRUPTION, LOSS OF BUSINESS INFORMATION, OR ANY OTHER PECUNIARY
+LOSS) ARISING OUT OF THE USE OF OR INABILITY TO USE THIS SOFTWARE, EVEN IF
+NVIDIA HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+% A "godrays" effect done as a single pass. Make sure the input
+%  texture has alpha! It works best on a simple planar card, but
+%  go ahead and experiment with all sorts of geometry. The size of
+%  the glow is kept constant in screen space by adjustng the rays according
+%  to the partial derivates of UV in screenspace x and y -- that is,
+%    using ddx(UV) and ddy(UV)
+
+keywords: material image_processing derivatives texture
+date: 080423
+$Date$
+
+
+To learn more about shading, shaders, and to bounce ideas off other shader
+    authors and users, visit the NVIDIA Shader Library Forums at:
+
+    http://developer.nvidia.com/forums/
+
+*******************************************************************************
+******************************************************************************/
+
+/*****************************************************************/
+/*** HOST APPLICATION IDENTIFIERS ********************************/
+/*** Potentially predefined by varying host environments *********/
+/*****************************************************************/
+
+// #define _XSI_		/* predefined when running in XSI */
+
+#ifndef FXCOMPOSER_VERSION	/* for very old versions */
+#define FXCOMPOSER_VERSION 180
+#endif /* FXCOMPOSER_VERSION */
+
+// #define FLIP_TEXTURE_Y	/* Different in OpenGL & DirectX */
+
+/*****************************************************************/
+/*** EFFECT-SPECIFIC CODE BEGINS HERE ****************************/
+/*****************************************************************/
+
+/******* Lighting Macros *******/
+/** To use "Object-Space" lighting definitions, change these two macros: **/
+#define LIGHT_COORDS "World"
+// #define OBJECT_SPACE_LIGHTS /* Define if LIGHT_COORDS is "Object" */
+/** Define the macro USE_SHARED_SHADOW to permit the import and use of "shared
+		surface "shadow maps created by COLLADA-FX. **/
+// #define USE_SHARED_SHADOW
+
+float Script : STANDARDSGLOBAL <
+    string UIWidget = "none";
+    string ScriptClass = "object";
+    string ScriptOrder = "standard";
+    string ScriptOutput = "color";
+    string Script = "Technique=Main;";
+> = 0.8;
+
+/**** UNTWEAKABLES: Hidden & Automatically-Tracked Parameters **********/
+
+// transform object vertices to world-space:
+float4x4 gWorldXf : World;
+// transform object normals, tangents, & binormals to world-space:
+float4x4 gWorldITXf : WorldInverseTranspose;
+// transform object vertices to view space and project them in perspective:
+float4x4 gWvpXf : WorldViewProjection;
+// provide tranform from "view" or "eye" coords back to world-space:
+float4x4 gViewIXf : ViewInverse;
+
+/************* TWEAKABLES **************/
+
+float gDD = 7.0;
+float gIntensity = 4.0f;
+float gGlowGamma = 1.8f;
+float gBlurStart = 1.0f;
+float gBlurWidth = -6.0f;
+float gRepeat = 4.0;
+bool gFlipY = false;
+
+/************** model texture **************/
+
+texture gImageTex <
+    string ResourceName = "FunTime.dds";
+    string ResourceType = "2D";
+>;
+
+sampler2D gImageSampler = sampler_state {
+    Texture = <gImageTex>;
+    MinFilter = LinearMipMapLinear;
+    MagFilter = Linear;
+    WrapS = ClampToBorder;
+    WrapT = ClampToBorder;
+};
+
+/**************************************/
+/** Connectors ************************/
+/**************************************/
+
+struct appdata {
+    float3 Position	: POSITION;
+    float2 UV		: TEXCOORD0;
+    float4 Normal	: NORMAL0;
+};
+
+struct texposVertexOutput {
+    float4 HPosition	: POSITION;
+    float2 UV	: TEXCOORD0;
+    float4 ScreenCoords	: TEXCOORD1; // we copy HPosition into this
+};
+
+/****************************************/
+/*** SHADERS ****************************/
+/****************************************/
+
+texposVertexOutput vshader(appdata IN) {
+    texposVertexOutput OUT = (texposVertexOutput)0;
+    float4 Po = float4(IN.Position.xyz,1.0);
+    OUT.HPosition = OUT.ScreenCoords = mul(gWvpXf,Po);
+    const float2 uvCenter = float2(0.5,0.5); // for un-normalized texture coords set to (w/2,h/2)
+    float2 nuv = IN.UV - uvCenter;
+    if (gFlipY) {
+    	nuv.y = - nuv.y;
+    }
+    OUT.UV = float2(max(0.001,gRepeat) * nuv.x,
+		    max(0.001,gRepeat) * nuv.y) + uvCenter;
+    return OUT;
+}
+
+void fshader(texposVertexOutput IN,
+               uniform sampler2D tex_0,
+               out float4 o_color : COLOR) {
+    int nsamples = 4;
+    // location on screen relative to image center
+    float2 sUV = float2(IN.ScreenCoords.x/IN.ScreenCoords.w,
+			IN.ScreenCoords.y/IN.ScreenCoords.w);
+    // we just want this as a 2D direction, so normalize it
+    sUV = normalize(sUV); 
+    // duv will be our screen-radial 2D UV vector -- that is, our step size in UV based
+    //    on the local partial derivatives of UV in screen-x and screen-y.
+    //    Note that ddx()/ddy() return "float2" here
+    float2 duv = (sUV.x * ddx(IN.UV)) + (sUV.y * ddy(IN.UV));
+    duv *= gDD;
+    // now we can use this step to accumulate our color samples
+    float4 blurred = 0;
+    for(int i=0; i<nsamples; i++) {
+    	float scale = gBlurStart + gBlurWidth*(i/(float) (nsamples-1));
+    	blurred += tex2D(tex_0, IN.UV + scale * duv);
+    }
+    blurred /= nsamples;
+    // tweak the color a bit
+    blurred.rgb = pow(blurred.rgb,gGlowGamma);
+    blurred.rgb *= gIntensity;
+    blurred.rgb = saturate(blurred.rgb);
+    // now composite original pic back on top of the blur
+    float4 origTex = tex2D(tex_0, IN.UV);
+    float3 newC = origTex.rgb + (1.0-origTex.a)*blurred.rgb;
+    float newA = max(origTex.a,blurred.a);
+    o_color = float4(newC.rgb,newA);
+}
+
+///////////////////////////////////////
+/// TECHNIQUES ////////////////////////
+///////////////////////////////////////
+
+// technique Main <
+// 	string Script = "Pass=p0;";
+// > {
+//     pass p0 <
+// 	string Script = "Draw=geometry;";
+//     > {
+//         VertexProgram = compile vp40 ddTexVS(gWorldITXf,gWorldXf,
+// 				gViewIXf,gWvpXf,
+// 		    gRepeat, gFlipY);
+// 		DepthTestEnable = true;
+// 		DepthMask = true;
+// 		CullFaceEnable = false;
+// 		BlendEnable = false;
+// 		DepthFunc = LEqual;
+//         FragmentProgram = compile fp40 ddTexPS(gImageSampler,gDD,
+// 				gBlurStart,gBlurWidth,
+// 				gIntensity,gGlowGamma,32);
+//     }
+// }
+
+/***************************** eof ***/

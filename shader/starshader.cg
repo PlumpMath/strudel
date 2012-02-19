@@ -2,23 +2,6 @@
 //
 //Cg profile arbvp1 arbfp1
 
-void vshader(float4 vtx_position   : POSITION,
-             float3 vtx_normal     : NORMAL,
-             out float4 l_position : POSITION,
-             out float4 l_coords   : TEXCOORD0,
-             out float4 l_color    : COLOR,
-             uniform float4 mspos_eye,
-             uniform float4 k_starcolor,
-             uniform float4x4 mat_modelproj)
-{
-  // transform the position for output
-  l_position = mul(mat_modelproj, vtx_position);
-  // pass it through untransformed for procedural texturing
-  l_coords = vtx_position;
-  
-  l_color = k_starcolor; //* max( dot( vtx_normal, lightdir ), 0 );
-}
-
 float4 multi_oct_noise( sampler3D tex, float4 pos, float aspect, float rolloff )
 {
   // top octave is low frequency
@@ -50,6 +33,23 @@ float4 dist_noise( sampler3D tex, float4 pos, float distortion, float aspect, fl
   return v;
 }
 
+void vshader(float4 vtx_position   : POSITION,
+             float3 vtx_normal     : NORMAL,
+             out float4 l_position : POSITION,
+             out float4 l_coords   : TEXCOORD0,
+             out float4 l_color    : COLOR,
+             uniform float4 k_seed,
+             uniform float4 mspos_eye,
+             uniform float4 k_starcolor,
+             uniform float4x4 mat_modelproj)
+{
+  // transform the position for output
+  l_position = mul(mat_modelproj, vtx_position);
+  // pass it through untransformed for procedural texturing
+  l_coords = vtx_position;
+  
+  l_color = k_starcolor; //* max( dot( vtx_normal, lightdir ), 0 );
+}
 float min_channel(float4 v) {
   float t = (v.x<v.y) ? v.x : v.y;
   t = (t<v.z) ? t : v.z;

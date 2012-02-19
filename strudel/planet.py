@@ -1,10 +1,36 @@
+from strudel.spheregeo import SphereNode
+from direct.task import Task
+from pandac.PandaModules import Vec3, Vec3D, Vec4, PNMImage
+from pandac.PandaModules import Shader, Texture, TextureStage
+from pandac.PandaModules import PointLight, NodePath, PandaNode
+from pandac.PandaModules import ColorBlendAttrib
+import random, os
+import glob
 
-class PlanetDisplay(object):
+from strudel.view import View
+
+class Planet(object):
+    @classmethod
+    def random(cls):
+        return cls()
+
+class ParamSet(object):
+    def __init__( self, seedparam ):
+        self.vectors = {}
+        self.vectors["seed"    ] = seedparam
+        self.vectors["bias12"  ] = Vec4(0,0,0,0)
+        self.vectors["bias34"  ] = Vec4(0,0,0,0.0)
+        self.vectors["scale"   ] = Vec4(0.3,0.3,0.3,0.3)
+        self.vectors["aspect"  ] = Vec4(1,1,0.7,0.7)
+        self.vectors["latitude"] = Vec4(0.5,0.0,0.0,0.0)
+        self.vectors["noisemix"] = Vec4(0,0,1,1)
+
+class PlanetView(View):
     ready = False
 
     @classmethod
     def setup(cls, app):
-        cls.noisetex = app.loader.load3DTexture("texture/fbm_###.tif")
+        cls.noisetex = app.loader.load3DTexture("texture/noise/fbm_###.tif")
         cls.noisestage = TextureStage('noise')
         cls.layer1stage = TextureStage('layer1')
         cls.layer2stage = TextureStage('layer2')
@@ -14,11 +40,11 @@ class PlanetDisplay(object):
 
         layernames = ["layer1", "layer2", "layer3", "layer4"]
         stages = [cls.layer1stage, cls.layer2stage, cls.layer3stage, cls.layer4stage]
-        texture_files = os.listdir("texture/")
+        texture_files = os.listdir("texture/planet/layers/")
         for filename in texture_files:
             name,ext = os.path.splitext(filename)
             if name.endswith( "layer1" ):
-                paths = [ "texture/" + filename.replace("layer1",layer) for layer in layernames ]
+                paths = [ "texture/planet/layers/" + filename.replace("layer1",layer) for layer in layernames ]
                 #print paths
                 if all( os.path.exists( path ) for path in paths ):
                     setname = name.replace("layer1","").strip("_")
@@ -33,24 +59,19 @@ class PlanetDisplay(object):
 
         cls.ready = True
 
-
-    def __init__(self, app, planet):
-        if not PlanetDisplay.ready: PlanetDisplay.setup(app)
-        self.node = app.render.attachNewNode(SphereNode(subdivides=4))
-        self.node.setShader(Shader.load("shader/starshader.cg"))
+    def __init__(self, base, planet, **kwargs):
+        super(PlanetView, self).__init__(base, planet, **kwargs)
+        if not PlanetView.ready: PlanetView.setup(base)
+        self.node = base.render.attachNewNode(SphereNode(subdivides=4))
+        self.node.setShader(Shader.load("shader/planet.cg"))
         self.cloudtime = 0.0
         self.seed = hash("fish")
         self.param_set = ParamSet(self.seed)
 
         self.compute_seed_param()
-        for stage, tex in PlanetDisplay.texture_sets['sun_big']:
+        for stage, tex in PlanetView.texture_sets['terrestrial_big']:
             self.node.setTexture(stage, tex)
 
-        self.roll = 0
-        self.pitch = 0
-        self.yaw = 0
-        self.speed = 0.00000001
-        self.lasttime = 0.0
         self.setup_shader_inputs()
 
     def compute_seed_param(self):
@@ -62,13 +83,9 @@ class PlanetDisplay(object):
     def setup_shader_inputs(self):
         for k, v in self.param_set.vectors.iteritems():
             self.node.setShaderInput(k, v)
+        self.node.setShaderInput("eye", self.base.camera)
 
-    def tick(self, time):
-        elapsed = time - self.lasttime
-        self.lasttime = time
+    def tick(self, elapsed):
         self.cloudtime += elapsed * 0.02
-        self.yaw += 360.0 * self.speed * elapsed
-        self.node.setHpr(self.yaw, self.pitch, self.roll)
         self.compute_seed_param()
         self.setup_shader_inputs()
-

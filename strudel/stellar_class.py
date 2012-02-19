@@ -94,10 +94,10 @@ class StellarClass(object):
                 return StellarClass.get(spec_type)
 
     def __repr__(self):
-        return "<StellarClass " + self.spec_type + ">"
+        return "<StellarClass " + self.name + ">"
 
     def __init__(self, row):
-        self.spec_type = row['Type']                                    # e.g. G2V
+        self.name = row['Type']                                    # e.g. G2V
         self.mass = float(row['Mass'])                                # sols
         self.luminosity = float(row['Luminosity'])        # sols
         self.radius = float(row['Radius'])                        # sols

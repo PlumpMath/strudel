@@ -13,13 +13,16 @@ from direct.filter.CommonFilters import CommonFilters
 
 from stellar_class import StellarClass
 from math import log
+from strudel.model import Model
+from strudel.view import View
 
-class Star(object):
+class Star(Model):
     @classmethod
     def random(cls):
         return cls(StellarClass.getRandom())
 
-    def __init__(self, sclass):
+    def __init__(self, sclass, **kwargs):
+        super(Star, self).__init__(**kwargs)
         if isinstance(sclass, str):
             sclass = StellarClass.get(sclass)
         self.sclass = sclass
@@ -31,6 +34,9 @@ class Star(object):
     def color(self):
         return Vec4(self.red, self.green, self.blue, 1)
 
+    def __repr__(self):
+        return "<Star %s [%s]>" % (self.name, self.sclass.name)
+
 class ParamSet(object):
     def __init__( self, seedparam ):
         self.vectors = {}
@@ -41,7 +47,7 @@ class ParamSet(object):
         self.vectors["latitude"] = Vec4(0.5,0.0,0.0,0.0)
         self.vectors["noisemix"] = Vec4(0,0,0.5,0.5)
 
-class StarDisplay(object):
+class StarView(View):
     ready = False
 
     @classmethod
@@ -69,11 +75,9 @@ class StarDisplay(object):
 
         cls.ready = True
 
-    def __init__(self, base, star):
-        if not StarDisplay.ready: StarDisplay.setup(base)
-        self.obj = star
-
-        self.base = base
+    def __init__(self, base, star, **kwargs):
+        super(StarView, self).__init__(base, star, **kwargs)
+        if not StarView.ready: StarView.setup(base)
         self.seed = random.random()
 
         plight = PointLight("starlight")
@@ -96,17 +100,11 @@ class StarDisplay(object):
 
         self.compute_seed_param()
 
-        for stage, tex in StarDisplay.texture_set:
+        for stage, tex in StarView.texture_set:
             self.node.setTexture(stage, tex)
 
-        self.roll = 0
-        self.pitch = 0
-        self.yaw = 0
         self.speed = 0.00000001
-        self.lasttime = 0.0
         self.setup_shader_inputs()
-
-        base.displays.append(self)
 
     def compute_seed_param(self):
         rng = random.Random()
@@ -120,16 +118,7 @@ class StarDisplay(object):
         self.node.setShaderInput("starcolor", self.obj.color)
         self.node.setShaderInput("eye", self.base.camera)
 
-
-    def tick(self, time):
-        elapsed = time - self.lasttime
-        self.lasttime = time
+    def tick(self, elapsed):
         self.cloudtime += elapsed * 0.05
-        self.yaw += 360.0 * self.speed * elapsed
-        self.node.setHpr(self.yaw, self.pitch, self.roll)
         self.compute_seed_param()
         self.setup_shader_inputs()
-
-    def remove(self):
-        self.node.remove()
-        self.base.displays.remove(self)
