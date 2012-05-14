@@ -3,16 +3,41 @@ from direct.task import Task
 from pandac.PandaModules import Vec3, Vec3D, Vec4, PNMImage
 from pandac.PandaModules import Shader, Texture, TextureStage
 from pandac.PandaModules import PointLight, NodePath, PandaNode
-from pandac.PandaModules import ColorBlendAttrib
+from pandac.PandaModules import Point3D
 import random, os
 import glob
+from math import pi, sin, cos
 
 from strudel.view import View
+from strudel.model import Model
+from strudel.star import Star
+from strudel.units import AU, Sol
 
-class Planet(object):
+class Planet(Model):
     @classmethod
     def random(cls):
         return cls()
+
+    def __init__(self, **kwargs):
+        super(Planet, self).__init__(**kwargs)
+
+    def recalc_pos(self):
+        x = self.apsis * AU * cos(self.theta)
+        y = self.apsis * AU * sin(self.theta)
+        z = 0
+        self.pos = self.orbiting.pos + Point3D(x,y,z)
+        return self.pos
+
+    @property
+    def star(self):
+        if isinstance(self.orbiting, Star):
+            return self.orbiting
+        else:
+            return self.orbiting.star
+
+    @property
+    def radius_km(self):
+        return self.radius*Sol.radius
 
 class ParamSet(object):
     def __init__( self, seedparam ):
@@ -29,8 +54,8 @@ class PlanetView(View):
     ready = False
 
     @classmethod
-    def setup(cls, app):
-        cls.noisetex = app.loader.load3DTexture("texture/noise/fbm_###.tif")
+    def setup(cls, loader):
+        cls.noisetex = loader.load3DTexture("texture/noise/fbm_###.tif")
         cls.noisestage = TextureStage('noise')
         cls.layer1stage = TextureStage('layer1')
         cls.layer2stage = TextureStage('layer2')
@@ -45,13 +70,11 @@ class PlanetView(View):
             name,ext = os.path.splitext(filename)
             if name.endswith( "layer1" ):
                 paths = [ "texture/planet/layers/" + filename.replace("layer1",layer) for layer in layernames ]
-                #print paths
                 if all( os.path.exists( path ) for path in paths ):
                     setname = name.replace("layer1","").strip("_")
-                    #print "Found layer set - %s"%setname
                     texture_set = [ (cls.noisestage,cls.noisetex) ]
                     for stage,path in zip(stages,paths):
-                        tex = app.loader.loadTexture( path )
+                        tex = loader.loadTexture( path )
                         tex.setWrapU( Texture.WMClamp )
                         tex.setWrapV( Texture.WMClamp )
                         texture_set.append( (stage, tex) )
@@ -59,10 +82,10 @@ class PlanetView(View):
 
         cls.ready = True
 
-    def __init__(self, base, planet, **kwargs):
-        super(PlanetView, self).__init__(base, planet, **kwargs)
-        if not PlanetView.ready: PlanetView.setup(base)
-        self.node = base.render.attachNewNode(SphereNode(subdivides=4))
+    def __init__(self, parent, planet, **kwargs):
+        super(PlanetView, self).__init__(parent, planet, **kwargs)
+        if not PlanetView.ready: PlanetView.setup(self.base.loader)
+        self.node = NodePath(SphereNode(subdivides=4))
         self.node.setShader(Shader.load("shader/planet.cg"))
         self.cloudtime = 0.0
         self.seed = hash("fish")
@@ -73,6 +96,12 @@ class PlanetView(View):
             self.node.setTexture(stage, tex)
 
         self.setup_shader_inputs()
+        self.node.setScale(1/self.node.getBounds().getRadius())
+        self.node.reparentTo(self.parent.node)
+
+    def set_light(self, light):
+        self.node.setShaderInput("light", light)
+        self.node.setShaderInput("lightcolor", Vec4(light.getColor()))
 
     def compute_seed_param(self):
         rng = random.Random()

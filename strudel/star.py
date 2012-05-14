@@ -13,10 +13,14 @@ from direct.filter.CommonFilters import CommonFilters
 
 from stellar_class import StellarClass
 from math import log
-from strudel.model import Model
+from strudel.model import Model, many_to_one, one_to_one
 from strudel.view import View
+from strudel.units import Sol
 
 class Star(Model):
+    #system = one_to_one(backref='star')
+    galaxy = many_to_one(backref='stars')
+
     @classmethod
     def random(cls):
         return cls(StellarClass.getRandom())
@@ -37,6 +41,17 @@ class Star(Model):
     def color(self):
         return Vec4(self.red, self.green, self.blue, 1)
 
+    @property
+    def radius_km(self):
+        return self.radius*Sol.radius
+
+    @property
+    def system(self):
+        if not hasattr(self, '_system'):
+            from strudel.star_system import StarSystem
+            self._system = StarSystem(self)
+        return self._system
+
     def __repr__(self):
         return "<Star %s [%s]>" % (self.name, self.sclass.name)
 
@@ -54,8 +69,8 @@ class StarView(View):
     ready = False
 
     @classmethod
-    def setup(cls, base):
-        cls.noisetex = base.loader.load3DTexture("texture/noise/fbm_###.tif")
+    def setup(cls, loader):
+        cls.noisetex = loader.load3DTexture("texture/noise/fbm_###.tif")
         cls.noisestage = TextureStage('noise')
         cls.layer1stage = TextureStage('layer1')
         cls.layer2stage = TextureStage('layer2')
@@ -69,24 +84,26 @@ class StarView(View):
         paths.sort()
         cls.texture_set = [ (cls.noisestage,cls.noisetex) ]
         for stage,path in zip(stages,paths):
-            tex = base.loader.loadTexture( path )
+            tex = loader.loadTexture( path )
             tex.setWrapU( Texture.WMClamp )
             tex.setWrapV( Texture.WMClamp )
             cls.texture_set.append( (stage, tex) )
 
         cls.ready = True
 
-    def __init__(self, base, star, **kwargs):
-        super(StarView, self).__init__(base, star, **kwargs)
-        if not StarView.ready: StarView.setup(base)
+    def __init__(self, parent, star, **kwargs):
+        super(StarView, self).__init__(parent, star, **kwargs)
+        if not StarView.ready: StarView.setup(self.base.loader)
         self.seed = random.random()
 
-        plight = PointLight("starlight")
-        plight.setColor(self.obj.color)
-        self.light = base.render.attachNewNode(plight)
+        self.node = NodePath('star')
 
-        self.node = self.light.attachNewNode(SphereNode(subdivides=4))
-        self.node.setShader(Shader.load("shader/star.cg"))
+        plight = PointLight("starlight")
+        self.light = self.node.attachNewNode(plight)
+        self.light.setColor(self.obj.color)
+
+        self.model = self.light.attachNewNode(SphereNode(subdivides=4))
+        self.model.setShader(Shader.load("shader/star.cg"))
         self.cloudtime = 0.0
         #self.seed = hash("fish")
         self.param_set = ParamSet(self.seed)
@@ -101,10 +118,13 @@ class StarView(View):
         self.compute_seed_param()
 
         for stage, tex in StarView.texture_set:
-            self.node.setTexture(stage, tex)
+            self.model.setTexture(stage, tex)
 
         self.speed = 0.00000001
         self.setup_shader_inputs()
+
+        self.node.setScale(1/self.node.getBounds().getRadius())
+        self.node.reparentTo(self.parent.node)
 
     def compute_seed_param(self):
         rng = random.Random()
@@ -114,9 +134,9 @@ class StarView(View):
 
     def setup_shader_inputs(self):
         for k, v in self.param_set.vectors.iteritems():
-            self.node.setShaderInput(k, v)
-        self.node.setShaderInput("starcolor", self.obj.color)
-        self.node.setShaderInput("eye", self.base.camera)
+            self.model.setShaderInput(k, v)
+        self.model.setShaderInput("starcolor", self.obj.color)
+        self.model.setShaderInput("eye", self.base.camera)
 
     def tick(self, elapsed):
         self.cloudtime += elapsed * 0.05

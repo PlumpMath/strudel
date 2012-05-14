@@ -1,3 +1,4 @@
+from direct.showbase.ShowBase import ShowBase
 from strudel.evented import Evented
 
 class View(Evented):
@@ -6,15 +7,25 @@ class View(Evented):
      If you consider Panda3D and the graphical interface as the
      "controller" part of MVC architecture, then this is the "view"
      """
-    def __init__(self, base, obj):
+    def __init__(self, parent, obj):
+        self.children = []
         self.obj = obj
-        self.base = base
-        self.base.views.append(self)
+        self.parent = parent
+        self.parent.children.append(self)
         self.on('tick', lambda time: self.tick(time))
 
     def remove(self):
         if hasattr(self, 'node'): self.node.remove()
-        self.base.views.remove(self)
+        self.parent.children.remove(self)
 
     def tick(self, time):
-        pass
+        for view in self.children:
+            view.tick(time)
+
+    @property
+    def base(self):
+        if isinstance(self.parent, ShowBase):
+            return self.parent
+        else:
+            return self.parent.base
+

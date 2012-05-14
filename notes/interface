@@ -1,0 +1,18 @@
+Interacting with planets:
+    Moving into a planet will transition the view from movement across a 2D plane
+    perpendicular to the axis of rotation into a plane wrapped around the sphere
+    itself. This allows retention of a simple interface without sacrificing the
+    ability to interact with local elements on the surface of a big 3D object like
+    a planet.
+
+    Questions:
+
+    How do we exit from this interface?
+
+        Spore's solution is to link scale movement to zooming. In our case
+        it may be more appropriate to have a keystroke or UI element.
+
+    How do ships in orbit around planets interact with ships outside that orbit?
+
+        To be solved later! If a good solution cannot be found, I think
+        it is not entirely unacceptable to just disallow such interaction.

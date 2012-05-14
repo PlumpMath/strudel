@@ -7,6 +7,9 @@ from strudel.stellar_class import StellarClass
 from strudel.galaxy import Galaxy, GalaxyGenerator
 from strudel.star import Star, StarView
 from strudel.planet import Planet, PlanetView
+from strudel.star_system import StarSystem
+from strudel.ship import Ship, ShipView
+from strudel.game import Game
 
 
 from strudel.spheregeo import SphereNode
@@ -14,7 +17,8 @@ from direct.task import Task
 from pandac.PandaModules import Vec3, Vec3D, Vec4, PNMImage
 from pandac.PandaModules import Shader, Texture, TextureStage
 from pandac.PandaModules import PointLight, NodePath, PandaNode
-from pandac.PandaModules import ColorBlendAttrib
+from pandac.PandaModules import ColorBlendAttrib, WindowProperties
+from pandac.PandaModules import Point3, Point3D
 import random, os
 import sys
 
@@ -37,10 +41,12 @@ class StrudelApp(ShowBase, Evented):
         self.disableMouse()
 
         self.filters = CommonFilters(self.win, self.cam)
-        self.views = []
+        self.children = []
         self.texts = []
         self.want_shell = False
         self.inspector = ObjectInspector(self)
+        self.simulating = True
+        self.simspeed = 10000
 
         # HACK (Mispy): This disables the alt-modifier in order to
         # workaround a compatibility issue with Panda on some Linux
@@ -61,19 +67,17 @@ class StrudelApp(ShowBase, Evented):
         return Task.cont
 
     def tick_task(self, task):
-        elapsed = task.time - self.lasttime
-        self.emit('tick', elapsed)
-        for view in self.views:
-            if hasattr(view, 'tick'):
-                view.emit('tick', elapsed)
-        self.lasttime = task.time
+        elapsed = (task.time - self.lasttime)
+        if elapsed > 0.0:
+            if self.game:
+                self.game.tick(elapsed)
+            self.lasttime = task.time
         return Task.cont
 
     def debug_shell(self):
         self.want_shell = True
 
     def reload_app(self):
-        print "raffle"
         python = sys.executable
         os.execl(python, python, *sys.argv)
 
@@ -84,7 +88,6 @@ class StrudelApp(ShowBase, Evented):
             width = win.getProperties().getXSize()
             height = win.getProperties().getYSize()
             self.cam.node().getLens().setFilmSize(width, height)
-            #self.cam.node().getLens().setFocalLength(FOCAL_LENGTH)
 
     def setup(self):
         self.lasttime = 0.0
@@ -92,6 +95,7 @@ class StrudelApp(ShowBase, Evented):
         self.accept("escape", sys.exit)
         self.accept("`", self.debug_shell)
         self.accept("f12", self.reload_app)
+        self.accept("s", self.galaxy.save)
         self.accept(self.win.getWindowEvent(), self.on_window_event)
         for button in ["mouse1", "mouse2", "mouse3"]:
             self.pressed[button] = False
@@ -110,7 +114,7 @@ class StrudelApp(ShowBase, Evented):
 
     def cleanup(self):
         """Reset application to a clean slate so we can move to another state."""
-        for view in self.views:
+        for view in self.children:
             view.remove()
 
         for child in self.render.getChildren():
@@ -122,7 +126,6 @@ class StrudelApp(ShowBase, Evented):
         self.messenger.clear()
         self.taskMgr.removeTasksMatching('task')
         self.clear_handlers()
-        self.setup()
 
     def show_text(self, lines):
         if isinstance(lines, str): lines = [lines]
@@ -151,19 +154,39 @@ class StrudelApp(ShowBase, Evented):
     def load_galaxy(self, name):
         self.galaxy = Galaxy.load(name)
 
+    @property
+    def node(self):
+        return self.render
+
+    def switch_interface(self, interface):
+        self.interface = interface
+
+
 if __name__ == '__main__':
-    base = StrudelApp()
+    if len(sys.argv) > 1 and sys.argv[1] == 'shell':
+        galaxy = Galaxy.load('testing')
+        from IPython import embed
+        embed()
+        sys.exit()
+
     if len(sys.argv) > 1 and sys.argv[1] == "new_galaxy":
         galaxy = GalaxyGenerator.barred_spiral('testing')
+        player = Ship(galaxy=galaxy, locality=galaxy.stars[0].system)
         galaxy.save()
         sys.exit()
 
+    base = StrudelApp()
     base.load_galaxy('testing')
+    base.setup()
+
+    #base.wireframeOn()
+
     if len(sys.argv) > 1:
         if sys.argv[1] == "inspect":
-            base.inspector.inspect(eval(sys.argv[2]))
+            base.inspector.inspect(eval(sys.argv[2], globals(), base.__dict__))
+    else:
+        base.game = Game(base, base.galaxy)
 
-    base.setup()
     while True:
         base.step()
 

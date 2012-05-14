@@ -1,0 +1,12 @@
+PENDING:
+
+* Isolate graphical filter effects: star bloom on stars, galaxy glow on galaxy
+* Find a way to speed up IPython event loop
+* Some kind of sensible storage solution of complexity between pickling and SQL
+* Planet generation for star system (preferably fast-- might need to regenerate for compression purposes)
+* Change resolution on resize
+* SoaSE-inspired interface
+
+DONE:
+
+* Exit on window close

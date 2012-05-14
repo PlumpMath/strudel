@@ -2,7 +2,7 @@ from random import random, choice, gauss
 from math import cos, sin, log, tanh, pi
 from panda3d.core import Point3
 
-from strudel.model import Model
+from strudel.model import Model, one_to_many
 from strudel.stellar_class import StellarClass
 import cPickle as pickle
 import os, sys
@@ -31,7 +31,7 @@ class GalaxyGenerator(object):
 
           name = sclass.name + '-' + str(count)
 
-          galaxy.stars.append(Star(sclass, galaxy=galaxy, name=name, galpos=pos))
+          Star(sclass, galaxy=galaxy, name=name, galpos=pos)
 
         starcount, clustercount = 0, 0
         while starcount < numstars:
@@ -77,6 +77,8 @@ class GalaxyGenerator(object):
         return galaxy
 
 class Galaxy(Model):
+    ships = one_to_many(backref='galaxy')
+
     @staticmethod
     def load(name):
         logging.info("Loading Galaxy '%s'." % name)
@@ -96,8 +98,6 @@ class Galaxy(Model):
 
     def save(self):
         logging.info("Saving %s." % self)
+        output = pickle.dumps(self)
         f = open(Galaxy.savepath(self.name), 'wb')
-        pickle.dump(self, f)
-
-
-
+        f.write(output)

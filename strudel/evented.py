@@ -1,3 +1,5 @@
+from copy import copy
+
 class Evented(object):
     def on(self, evid, func, *args):
         if not hasattr(self, 'handlers'):
@@ -19,3 +21,10 @@ class Evented(object):
 
     def clear_handlers(self):
         self.handlers = {}
+
+    def __getstate__(self):
+        state = copy(self.__dict__)
+        if state.has_key('handlers'):
+            del state['handlers']
+        return state
+
