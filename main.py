@@ -125,7 +125,7 @@ class StrudelApp(ShowBase, Evented):
 
         self.messenger.clear()
         self.taskMgr.removeTasksMatching('task')
-        self.clear_handlers()
+        self.event_cleanup()
 
     def show_text(self, lines):
         if isinstance(lines, str): lines = [lines]
@@ -142,13 +142,15 @@ class StrudelApp(ShowBase, Evented):
         self.taskMgr.step()
         if self.want_shell:
             self.want_shell = False
-            from IPython import embed
+            from IPython.frontend.terminal.embed import InteractiveShellEmbed
+            context = self.__dict__.items() + self.game.__dict__.items()
+            shell = InteractiveShellEmbed(user_ns=dict(context))
             from IPython.lib import inputhook
             # XXX (Mispy): The IPython mainloop runs quite slowly
             # and causes massive FPS loss. I don't know how to solve
             # this but I believe it is solvable.
             inputhook.set_inputhook(self.step)
-            embed()
+            shell()
         return 0
 
     def load_galaxy(self, name):

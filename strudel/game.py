@@ -21,7 +21,9 @@ class Game(object):
         #self.sysview = StarSystemView(self, self.player.locality)
         #self.galview = GalaxyView(self, self.galaxy)
         self.localview = LocalView(self, self.player.locality)
-        self.camera.set_focus(self.localview.ship_views[self.player].node)
+        self.camera.set_focus(self.localview.view_for(self.player).node)
+        self.camera.zoom_out(5000)
+        self.zoom_stage = 0
 
         self.base.accept("wheel_up", self.zoom_in)
         self.base.accept("wheel_down", self.zoom_out)
@@ -52,13 +54,26 @@ class Game(object):
 
         self.player.tick(elapsed)
 
-
-
     def zoom_in(self):
-        self.camera.zoom_in()
+        if self.zoom_stage <= -5:
+            self.camera.zoom_in(100)
+            self.localview.distance_scale *= 1.5
+            self.localview.render()
+        else:
+            self.camera.zoom_in()
+
+        self.zoom_stage += 1
 
     def zoom_out(self):
-        self.camera.zoom_out()
+        if self.zoom_stage <= -5:
+            self.camera.zoom_out(100)
+            self.localview.distance_scale *= (1/1.5)
+            self.localview.render()
+        else:
+            self.camera.zoom_out()
+
+
+        self.zoom_stage -= 1
 
     def galaxy_map(self):
         pass

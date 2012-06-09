@@ -13,7 +13,6 @@ class Ship(Model):
     locality = many_to_one(backref='ships')
 
     def __init__(self, **kwargs):
-        Model.__init__(self, **kwargs)
         self.pos = Point3D(0,0,0)
         self.hpr = VBase3(0,0,0)
         self.movestate = MoveState.NORMAL

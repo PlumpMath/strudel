@@ -8,13 +8,19 @@ class View(Evented):
      "controller" part of MVC architecture, then this is the "view"
      """
     def __init__(self, parent, obj):
-        self.children = []
+        self.children = [] # Views dependent on this one.
         self.obj = obj
         self.parent = parent
         self.parent.children.append(self)
         self.on('tick', lambda time: self.tick(time))
 
+    def cleanup(self):
+        self.event_cleanup()
+        for view in list(self.children): view.remove()
+        assert(len(self.children) == 0)
+
     def remove(self):
+        self.cleanup()
         if hasattr(self, 'node'): self.node.remove()
         self.parent.children.remove(self)
 
