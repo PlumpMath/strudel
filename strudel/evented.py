@@ -63,7 +63,7 @@ class Evented(object):
     @evented
     def __getstate__(self):
         state = copy(self.__dict__)
-        del state['handlers']
-        del state['delegates']
+        for prop in ['handlers', 'delegates', 'evented']:
+            if state.has_key(prop): del state[prop]
         return state
 

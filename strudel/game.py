@@ -4,7 +4,10 @@ from strudel.smartcam import SmartCam
 from strudel.sysview import StarSystemView
 from strudel.localview import LocalView
 from strudel.galaxy_view import GalaxyView
-from strudel.ship import Ship
+from strudel.ship import Ship, ShipView
+
+ZOOM_TRANSITION_SYSTEM = -5 # Point where zooming out starts to move planets closer to each other.
+ZOOM_TRANSITION_GALAXY = -10 # Point where zooming out fades into galaxy view.
 
 class Game(object):
     def __init__(self, base, galaxy):
@@ -19,7 +22,12 @@ class Game(object):
         self.pressed = {}
 
         #self.sysview = StarSystemView(self, self.player.locality)
-        #self.galview = GalaxyView(self, self.galaxy)
+
+        self.galview = GalaxyView(self, self.galaxy)
+        self.galview.player = ShipView(self.galview, self.player)
+        self.galview.player.node.setPos(self.player.galpos)
+        self.galview.hide()
+
         self.localview = LocalView(self, self.player.locality)
         self.camera.set_focus(self.localview.view_for(self.player).node)
         self.camera.zoom_out(5000)
@@ -55,7 +63,10 @@ class Game(object):
         self.player.tick(elapsed)
 
     def zoom_in(self):
-        if self.zoom_stage <= -5:
+        if self.zoom_stage == ZOOM_TRANSITION_GALAXY:
+            self.galview.hide()
+            self.localview.show()
+        elif self.zoom_stage <= ZOOM_TRANSITION_SYSTEM:
             self.camera.zoom_in(100)
             self.localview.distance_scale *= 1.5
             self.localview.render()
@@ -65,7 +76,11 @@ class Game(object):
         self.zoom_stage += 1
 
     def zoom_out(self):
-        if self.zoom_stage <= -5:
+        if self.zoom_stage == ZOOM_TRANSITION_GALAXY:
+            self.localview.hide()
+            self.galview.show()
+            self.camera.set_focus(self.galview.player.node)
+        elif self.zoom_stage <= ZOOM_TRANSITION_SYSTEM:
             self.camera.zoom_out(100)
             self.localview.distance_scale *= (1/1.5)
             self.localview.render()

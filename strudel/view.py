@@ -24,6 +24,12 @@ class View(Evented):
         if hasattr(self, 'node'): self.node.remove()
         self.parent.children.remove(self)
 
+    def hide(self):
+        self.node.hide()
+
+    def show(self):
+        self.node.show()
+
     def tick(self, time):
         for view in self.children:
             view.tick(time)

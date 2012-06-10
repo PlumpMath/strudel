@@ -14,6 +14,7 @@ class Ship(Model):
 
     def __init__(self, **kwargs):
         self.pos = Point3D(0,0,0)
+        self.galpos = Point3D(0,0,0)
         self.hpr = VBase3(0,0,0)
         self.movestate = MoveState.NORMAL
         self.velocity = VBase3D(0,0,0)
